@@ -428,7 +428,7 @@ function AIExplainButton({ aiEnabled, prompt }) {
     setLoading(true);
     const res = await askAI(prompt);
     setLoading(false);
-    setText(res || 'دستیار هوش مصنوعی در دسترس نیست؛ بعداً تلاش کنید.');
+    setText(res || 'توکن شما به اتمام رسیده است. لطفاً پس از دریافت توکن جدید پیام دهید. خوشحال می‌شوم کمکتان کنم');
   }
   return (
     <div className="mt-3">
@@ -1640,7 +1640,7 @@ function ChatModule({ role, username, settings, chatMessages, setChatMessages })
     setInput(''); setAiLoading(true);
     const res = await askAI(`نقش تو دستیار آموزش زبان انگلیسی محیط‌کار برای کارمندان ایرانی است. کوتاه، دوستانه و کاربردی به فارسی پاسخ بده: ${userMsg}`);
     setAiLoading(false);
-    setAiMsgs((m) => [...m, { role: 'ai', text: res || 'سرویس موقتاً در دسترس نیست.' }]);
+    setAiMsgs((m) => [...m, { role: 'ai', text: res || 'توکن شما به اتمام رسیده است. لطفاً پس از دریافت توکن جدید پیام دهید. خوشحال می‌شوم کمکتان کنم' }]);
   }
 
   if (!settings.chatEnabled && !settings.aiAssistantEnabled) {
