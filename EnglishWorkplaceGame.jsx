@@ -1124,63 +1124,123 @@ function ToggleRow({ label, checked, onChange }) {
    ============================================================ */
 function ReportingModule({ allUsers, settings, setSettings, logs, role }) {
   const [search, setSearch] = useState('');
+  const [timeFilter, setTimeFilter] = useState('all');
 
-  // فقط کاربران عادی و ادمین (نه مدیر) را در گزارش نشان بده
   const players = allUsers.filter(u => u.role !== 'manager');
-  const rows = players.filter((u) => !search || u.username.includes(search));
-  const leaderboard = [...rows].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 6);
-  const avgScore = rows.length ? Math.round(rows.reduce((s, u) => s + (u.totalPoints || 0), 0) / rows.length) : 0;
+
+  const isInTimeFilter = (u) => {
+    if (timeFilter === 'all') return true;
+    if (!u.lastPlayedDate) return false;
+    const lastDate = new Date(u.lastPlayedDate);
+    if (isNaN(lastDate.getTime())) return false;
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    if (timeFilter === 'today') {
+      return u.lastPlayedDate === todayStr;
+    } else if (timeFilter === 'week') {
+      const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return lastDate >= oneWeekAgo;
+    } else if (timeFilter === 'month') {
+      return lastDate.getMonth() === today.getMonth() && lastDate.getFullYear() === today.getFullYear();
+    }
+    return true;
+  };
+
+  const rows = players.filter(
+    (u) => (!search || u.username.includes(search)) && isInTimeFilter(u)
+  );
+
+  // لیدربورد کلی (تحت تأثیر جستجو/فیلتر نیست)
+  const leaderboard = [...players]
+    .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+    .slice(0, 6);
+
+  const avgScore = rows.length
+    ? Math.round(rows.reduce((s, u) => s + (u.totalPoints || 0), 0) / rows.length)
+    : 0;
   const masteryPct = Math.min(100, Math.round(avgScore / 10));
 
-  const activityData = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'].map((d) => ({
-    day: d, ساعت: Math.round(Math.random() * 8 + 2),
-  }));
+  // داده‌های نمودار ساعات فعالیت: فقط یک‌بار تولید شوند
+  const [activityData] = useState(() =>
+    ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه'].map((d) => ({
+      day: d,
+      ساعت: Math.round(Math.random() * 8 + 2),
+    }))
+  );
 
   function exportMonthlyExcel() {
     const data = leaderboard.map((u, i) => ({
-      رتبه: i + 1, نام_کاربری: u.username, مجموع_امتیاز_ماهانه: u.totalPoints || 0,
-      تعداد_بازی: (u.history || []).length, میانگین_امتیاز_هر_بازی: (u.history || []).length ? Math.round((u.totalPoints || 0) / u.history.length) : 0,
+      رتبه: i + 1,
+      نام_کاربری: u.username,
+      مجموع_امتیاز_ماهانه: u.totalPoints || 0,
+      تعداد_بازی: (u.history || []).length,
+      میانگین_امتیاز_هر_بازی: (u.history || []).length
+        ? Math.round((u.totalPoints || 0) / u.history.length)
+        : 0,
     }));
     exportExcel(data, `monthly-report-${todayStr()}.xlsx`, 'گزارش ماهانه');
   }
 
-  const medal = ['🥇', '🥈', '🥉'];
+  const medals = ['🥇', '🥈', '🥉'];
 
   return (
     <div className="p-4 max-w-6xl mx-auto space-y-4 font-fa">
+      {/* ردیف اول نمودارها */}
       <div className="grid md:grid-cols-2 gap-4">
+        {/* User Active Hours */}
         <div className="rounded-3xl border-[4px] border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden bg-blue-900">
           <WindowBar icon={<BarChart3 size={13} className="text-blue-900" />} title="User Active Hours" tone="#ffffff" />
-          <div className="p-3">
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={activityData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="day" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                <YAxis tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                <Tooltip />
-                <Bar dataKey="ساعت" fill="#38bdf8" radius={[4, 4, 0, 0]} stroke="#0f172a" strokeWidth={1} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+<div className="p-3 pt-1">
+  <ResponsiveContainer width="100%" height={150}>
+    <BarChart data={leaderboard} layout="vertical" margin={{ left: 15, right: 5 }}>
+      <XAxis type="number" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+      <YAxis
+        type="category"
+        dataKey="username"
+        width={90}
+        tick={{ fill: '#e2e8f0', fontSize: 10 }}
+        tickMargin={8}               // فاصله نام‌ها از محور عمودی
+      />
+      <Tooltip />
+      <Bar dataKey="totalPoints" fill="#a78bfa" radius={[0, 6, 6, 0]} stroke="#0f172a" strokeWidth={1} />
+    </BarChart>
+  </ResponsiveContainer>
+</div>
         </div>
-        <div className="rounded-3xl border-[4px] border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden bg-blue-900">
+
+        {/* Monthly Score Leaderboard */}
+        <div className="relative rounded-3xl border-[4px] border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden bg-blue-900">
           <WindowBar icon={<Trophy size={13} className="text-blue-900" />} title="Monthly Score Leaderboard" tone="#ffffff" />
-          <div className="p-3">
-            <div className="flex justify-end mb-1">
-              {settings.leaderboardEnabled ? <Badge tone="green">فعال برای کاربران</Badge> : <Badge tone="red">غیرفعال</Badge>}
-            </div>
-            <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={leaderboard} layout="vertical" margin={{ left: 10 }}>
-                <XAxis type="number" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
-                <YAxis type="category" dataKey="username" width={70} tick={{ fill: '#e2e8f0', fontSize: 10 }} />
-                <Tooltip />
-                <Bar dataKey="totalPoints" fill="#a78bfa" radius={[0, 6, 6, 0]} stroke="#0f172a" strokeWidth={1} />
-              </BarChart>
-            </ResponsiveContainer>
+          {/* دکمه خاموش/روشن با متن «نمایش عمومی» در سمت چپ */}
+          <div className="absolute top-2 left-17 flex items-center gap-1.5">
+                        <span className="text-white text-[10px] font-extrabold leading-none">
+              نمایش عمومی
+            </span>
+            <ToggleSwitch
+              checked={settings.leaderboardEnabled}
+              onChange={(v) => setSettings({ ...settings, leaderboardEnabled: v })}
+            />
           </div>
+<div className="p-3 pt-1">
+  <ResponsiveContainer width="100%" height={150}>
+    <BarChart data={leaderboard} layout="vertical" margin={{ left: 15, right: 5 }}>
+      <XAxis type="number" tick={{ fill: '#cbd5e1', fontSize: 10 }} />
+      <YAxis
+        type="category"
+        dataKey="username"
+        width={90}
+        tick={{ fill: '#e2e8f0', fontSize: 10 }}
+        tickMargin={25}               // فاصله نام‌ها از محور عمودی
+      />
+      <Tooltip />
+      <Bar dataKey="totalPoints" fill="#a78bfa" radius={[0, 6, 6, 0]} stroke="#0f172a" strokeWidth={1} />
+    </BarChart>
+  </ResponsiveContainer>
+</div>
         </div>
       </div>
 
+      {/* ردیف دوم */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="rounded-3xl border-[4px] border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden bg-blue-900">
           <WindowBar icon={<Sparkles size={13} className="text-blue-900" />} title="Company Mastery Percentage" tone="#ffffff" />
@@ -1208,16 +1268,42 @@ function ReportingModule({ allUsers, settings, setSettings, logs, role }) {
         </div>
       </div>
 
+      {/* لیست کاربران با فیلتر زمان و جستجو */}
       <div className="rounded-3xl border-[4px] border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden bg-white">
         <WindowBar icon={<Users size={13} className="text-slate-900" />} title="لیست کاربران فعال" tone="#0f172a" dotBg="bg-blue-100" />
         <div className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <div className="flex gap-1 text-lg">{medal.slice(0, Math.min(3, leaderboard.length)).map((m, i) => <span key={i}>{m}</span>)}</div>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجوی کاربر..."
-              className="text-xs border-[2px] border-slate-900 rounded-lg px-2 py-1 font-bold" />
+            <div className="flex gap-1 text-lg">
+              {medals.map((m, i) => <span key={i}>{m}</span>)}
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value)}
+                className="text-xs border-[2px] border-slate-900 rounded-lg px-2 py-1 font-bold bg-white"
+              >
+                <option value="all">همه زمان‌ها</option>
+                <option value="today">امروز</option>
+                <option value="week">این هفته</option>
+                <option value="month">این ماه</option>
+              </select>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="جستجوی کاربر..."
+                className="text-xs border-[2px] border-slate-900 rounded-lg px-2 py-1 font-bold"
+              />
+            </div>
           </div>
           <table className="w-full text-xs">
-            <thead><tr className="text-slate-500 border-b-2 border-slate-900 font-extrabold"><th className="text-right py-1.5">نام کاربری</th><th>امتیاز کل</th><th>تعداد بازی</th><th>آخرین بازی</th></tr></thead>
+            <thead>
+              <tr className="text-slate-500 border-b-2 border-slate-900 font-extrabold">
+                <th className="text-right py-1.5">نام کاربری</th>
+                <th>امتیاز کل</th>
+                <th>تعداد بازی</th>
+                <th>آخرین بازی</th>
+              </tr>
+            </thead>
             <tbody>
               {rows.map((u) => (
                 <tr key={u.username} className="border-b border-slate-100 hover:bg-slate-50">
@@ -1227,12 +1313,21 @@ function ReportingModule({ allUsers, settings, setSettings, logs, role }) {
                   <td className="text-center font-bold">{u.lastPlayedDate || '—'}</td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={4} className="text-center text-slate-400 py-4 font-bold">هنوز کاربری بازی نکرده است.</td></tr>}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="text-center text-slate-400 py-4 font-bold">
+                    {search || timeFilter !== 'all'
+                      ? 'کاربری یافت نشد'
+                      : 'هنوز کاربری بازی نکرده است.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* بخش لاگ (ویژه مدیر) */}
       {role === 'manager' && (
         <div className="rounded-3xl border-[4px] border-slate-900 shadow-[8px_8px_0_0_#0f172a] overflow-hidden bg-white">
           <WindowBar icon={<ShieldCheck size={13} className="text-slate-900" />} title="لاگ کامل پاسخ‌ها (مدیران)" tone="#0f172a" dotBg="bg-blue-100" />
@@ -1251,7 +1346,6 @@ function ReportingModule({ allUsers, settings, setSettings, logs, role }) {
     </div>
   );
 }
-
 /* ============================================================
    ماژول ۸: پروفایل کاربر (USER PROFILE MODULE) - فقط برای کاربر عادی
    ============================================================ */
